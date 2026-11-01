@@ -1,0 +1,15 @@
+{
+  "name": "arbitro-balonmano-training",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.0.0",
+    "@netlify/functions": "^4.0.0",
+    "@netlify/identity": "^1.0.0",
+    "esbuild": "^0.27.0"
+  }
+}
+
