@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="auth.css">
+  <link rel="stylesheet" href="auth.css?v=20261101-2">
   <title>Árbitro — Entrenamiento de balonmano</title>
 </head>
 <body>
@@ -29,6 +29,6 @@
   <dialog id="rulesDialog" class="modal rules-modal"><div class="rules-shell"><header class="rules-head"><div><p class="eyebrow">DOCUMENTO DE CONSULTA</p><h2>Reglas de Juego · Septiembre 2025</h2></div><button id="closeRules" class="icon-button" aria-label="Cerrar reglamento">×</button></header><p class="rules-note">Reglamento oficial completo. También puedes <a href="reglamento-2025.pdf" target="_blank" rel="noopener">abrirlo en otra pestaña</a>.</p><iframe title="Reglas de Juego de balonmano, septiembre de 2025" src="reglamento-2025.pdf#view=FitH"></iframe></div></dialog>
   <dialog id="examDialog" class="modal"><div class="exam-shell"><header class="exam-head"><button id="closeExam" class="icon-button" aria-label="Salir del examen">×</button><div><p class="eyebrow">EXAMEN OFICIAL · ENTRENAMIENTO</p><div id="progressText" class="progress-title">Pregunta 1 de 25</div></div><div id="timer" class="timer">25:00</div></header><div class="progress-track"><span id="progressBar"></span></div><div class="exam-body"><div class="question-meta"><span id="questionNumber">PREGUNTA 01</span><span id="multiHint" class="multi-hint"></span></div><h2 id="questionText"></h2><div id="options" class="options"></div></div><div class="exam-foot"><span id="answeredCount">0 / 25 respondidas</span><div><button id="prevBtn" class="button ghost">Anterior</button><button id="nextBtn" class="button primary">Siguiente →</button><button id="finishBtn" class="button dark" hidden>Finalizar examen</button></div></div></div></dialog>
   <dialog id="resultDialog" class="modal"><div class="result-shell"><button id="closeResult" class="icon-button result-close" aria-label="Cerrar resultados">×</button><p class="eyebrow">RESULTADO DEL EXAMEN</p><h2 id="resultTitle">Examen completado</h2><div class="score-row"><strong id="scoreValue">0</strong><span>/ 100</span><span id="passBadge" class="pill">—</span></div><p id="scoreSummary" class="result-summary"></p><div id="reviewList" class="review-list"></div><button id="doneBtn" class="button dark">Volver al panel</button></div></dialog>
-  <script src="questions.js"></script><script src="app.js"></script>
+  <script src="questions.js"></script><script src="app.js?v=20261101-2"></script>
 </body>
 </html>
