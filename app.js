@@ -50,6 +50,7 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
     $('statAvg').textContent = average === null ? '—' : average;
     $('statBest').textContent = history.length ? Math.max(...history.map(item => item.score)) : '—';
     $('statWrong').textContent = (progress.wrongIds || []).length;
+    renderRuleInsight(history);
 
     const list = $('history');
     if (!currentUser) {
@@ -64,6 +65,48 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
     }
     list.className = 'history-list';
     list.innerHTML = history.slice(0, 4).map(item => `<div class="history-item"><span><b>${item.score}/100</b><small>${new Date(item.date).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · ${item.correct}/${item.questionCount || 25} correctas${item.mode === 'rule' && item.ruleNumber ? ` · Regla ${item.ruleNumber}` : ''}</small></span><span>${item.passed ? 'Aprobado' : 'Revisar'}</span></div>`).join('');
+  }
+
+  function renderRuleInsight(history) {
+    const title = $('ruleErrorRule');
+    const summary = $('ruleErrorSummary');
+    const total = $('ruleErrorCount');
+    if (!currentUser) {
+      title.textContent = 'Inicia sesión para ver tu análisis';
+      summary.textContent = 'Los fallos se agrupan por regla dentro de tu cuenta.';
+      total.textContent = '—';
+      return;
+    }
+    if (!history.length) {
+      title.textContent = 'Aún sin datos';
+      summary.textContent = 'Completa una prueba y te indicaremos qué regla conviene repasar.';
+      total.textContent = '—';
+      return;
+    }
+
+    const stats = new Map();
+    history.forEach((attempt, attemptIndex) => {
+      for (const id of attempt.wrongIds || []) {
+        const ruleNumber = Number(String(id).match(/^(\d+)\./)?.[1]);
+        if (!RULE_TITLES[ruleNumber]) continue;
+        if (!stats.has(ruleNumber)) stats.set(ruleNumber, { errors: 0, attempts: new Set() });
+        const ruleStats = stats.get(ruleNumber);
+        ruleStats.errors++;
+        ruleStats.attempts.add(attemptIndex);
+      }
+    });
+    if (!stats.size) {
+      title.textContent = 'Sin errores registrados';
+      summary.textContent = 'Todavía no hay fallos en tus pruebas.';
+      total.textContent = '0';
+      return;
+    }
+    const highestCount = Math.max(...[...stats.values()].map(item => item.errors));
+    const leaders = [...stats.entries()].filter(([, item]) => item.errors === highestCount).sort((a, b) => a[0] - b[0]);
+    title.textContent = leaders.map(([number]) => `Regla ${number} · ${RULE_TITLES[number]}`).join(' / ');
+    const examCount = Math.max(...leaders.map(([, item]) => item.attempts.size));
+    summary.textContent = `${highestCount} ${highestCount === 1 ? 'error' : 'errores'} en ${examCount} ${examCount === 1 ? 'prueba' : 'pruebas'}${leaders.length > 1 ? ' · empate entre reglas' : ''}. Se cuentan los fallos de todo tu historial.`;
+    total.textContent = String(highestCount);
   }
 
   function renderAccount() {
