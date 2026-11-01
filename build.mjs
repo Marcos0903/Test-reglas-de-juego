@@ -1,7 +1,7 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { build } from 'esbuild';
 
-const staticFiles = ['index.html', 'styles.css', 'auth.css', 'questions.js', 'manifest.webmanifest', 'sw.js', 'icon.svg'];
+const staticFiles = ['index.html', 'styles.css', 'auth.css', 'questions.js', 'manifest.webmanifest', 'sw.js', 'icon.svg', 'reglamento-2025.pdf'];
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
 for (const file of staticFiles) await cp(file, `dist/${file}`);
@@ -16,4 +16,3 @@ await build({
   minify: true
 });
 console.log('Static application bundled into dist/.');
-

@@ -51,7 +51,6 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
     $('currentName').childNodes[0].textContent = signedIn ? fullName(currentUser) : 'ÁRBITRO';
     $('brandMeta').textContent = signedIn ? 'CUENTA PERSONAL' : 'ENTRENAMIENTO';
     $('authStatus').innerHTML = signedIn ? '<i></i> Progreso sincronizado' : '<i></i> Acceso personal';
-    $('authButton').hidden = signedIn;
     $('logoutButton').hidden = !signedIn;
     $('adminButton').hidden = !currentUser?.roles?.includes('admin');
     $('startBtn').disabled = !available || !signedIn;
@@ -244,15 +243,31 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
 
   $('showSignup').onclick = showSignupForm;
   $('showLogin').onclick = showLoginForm;
-  $('authButton').onclick = () => { showLoginForm(); $('authDialog').showModal(); };
+  const menuButton = $('accountMenuButton');
+  const accountMenu = $('accountMenu');
+  function closeAccountMenu() { accountMenu.hidden = true; menuButton.setAttribute('aria-expanded', 'false'); }
+  menuButton.onclick = () => { accountMenu.hidden = !accountMenu.hidden; menuButton.setAttribute('aria-expanded', String(!accountMenu.hidden)); };
+  document.addEventListener('click', event => { if (!event.target.closest('.account-menu-wrap')) closeAccountMenu(); });
+  $('menuAccount').onclick = () => {
+    closeAccountMenu();
+    if (!currentUser) { showLoginForm(); $('authDialog').showModal(); return; }
+    $('accountDetails').innerHTML = `<p class="account-name">${escapeHtml(fullName(currentUser))}</p><p class="account-email">${escapeHtml(currentUser.email || '')}</p><p class="account-hint">Tu cuenta guarda tus resultados y progreso.</p>`;
+    $('accountAccess').hidden = true;
+    $('accountDialog').showModal();
+  };
+  $('accountAccess').onclick = () => { $('accountDialog').close(); showLoginForm(); $('authDialog').showModal(); };
+  $('closeAccount').onclick = () => $('accountDialog').close();
+  $('rulesButton').onclick = () => { closeAccountMenu(); $('rulesDialog').showModal(); };
+  $('closeRules').onclick = () => $('rulesDialog').close();
   $('closeAuth').onclick = () => $('authDialog').close();
   $('logoutButton').onclick = async () => {
+    closeAccountMenu();
     await logout();
     await setUser(null);
     showLoginForm();
     $('authDialog').showModal();
   };
-  $('adminButton').onclick = openAdminPanel;
+  $('adminButton').onclick = () => { closeAccountMenu(); openAdminPanel(); };
   $('closeAdmin').onclick = () => $('adminDialog').close();
   $('startBtn').onclick = begin;
   $('startBtn2').onclick = begin;
@@ -267,4 +282,3 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
   renderAccount();
   initializeAccount();
 })();
-
