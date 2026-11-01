@@ -38,11 +38,22 @@ export default async request => {
   const correctIds = attempt?.correctIds;
   const correct = attempt?.correct;
   const seconds = attempt?.seconds;
-  if (!Number.isInteger(correct) || correct < 0 || correct > 25 ||
-      !Number.isInteger(seconds) || seconds < 0 || seconds > 1500 ||
-      !Array.isArray(wrongIds) || wrongIds.length > 25 ||
-      !Array.isArray(correctIds) || correctIds.length > 25 ||
-      wrongIds.length + correctIds.length !== 25 || correctIds.length !== correct ||
+  const questionCount = attempt?.questionCount;
+  const mode = attempt?.mode;
+  const timeLimitSeconds = attempt?.timeLimitSeconds;
+  const supportedCounts = [5, 10, 15, 20, 25, 30, 40, 50];
+  const supportedTimes = [600, 900, 1200, 1500, 1800, 2100, 2700, 3600];
+  const validMode = mode === 'official'
+    ? questionCount === 25 && timeLimitSeconds === 2100 && seconds <= timeLimitSeconds
+    : mode === 'timed'
+      ? supportedCounts.includes(questionCount) && supportedTimes.includes(timeLimitSeconds) && seconds <= timeLimitSeconds
+      : mode === 'untimed' && supportedCounts.includes(questionCount) && timeLimitSeconds === 0;
+  if (!Number.isInteger(questionCount) || !supportedCounts.includes(questionCount) ||
+      !Number.isInteger(correct) || correct < 0 || correct > questionCount ||
+      !Number.isInteger(seconds) || seconds < 0 || seconds > 86400 || !validMode ||
+      !Array.isArray(wrongIds) || wrongIds.length > questionCount ||
+      !Array.isArray(correctIds) || correctIds.length > questionCount ||
+      wrongIds.length + correctIds.length !== questionCount || correctIds.length !== correct ||
       [...wrongIds, ...correctIds].some(id => typeof id !== 'string' || !/^\d+\.\d+$/.test(id)) ||
       new Set([...wrongIds, ...correctIds]).size !== wrongIds.length + correctIds.length) {
     return json({ error: 'El resultado del examen no es válido.' }, 400);
@@ -51,14 +62,16 @@ export default async request => {
   const attemptId = `${Date.now().toString(36)}-${crypto.randomUUID()}`;
   const record = {
     date: new Date().toISOString(),
-    score: correct * 4,
+    score: Math.round(correct * 100 / questionCount),
     correct,
-    passed: correct >= 21,
+    passed: correct >= Math.ceil(questionCount * 0.84),
     seconds,
+    questionCount,
+    mode,
+    timeLimitSeconds,
     wrongIds,
     correctIds
   };
   await store.set(`attempt:${user.id}:${attemptId}`, JSON.stringify(record));
   return json({ saved: true, attempt: record }, 201);
 };
-

@@ -43,7 +43,7 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
       return;
     }
     list.className = 'history-list';
-    list.innerHTML = history.slice(0, 4).map(item => `<div class="history-item"><span><b>${item.score}/100</b><small>${new Date(item.date).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · ${item.correct}/25 correctas</small></span><span>${item.passed ? 'Aprobado' : 'Revisar'}</span></div>`).join('');
+    list.innerHTML = history.slice(0, 4).map(item => `<div class="history-item"><span><b>${item.score}/100</b><small>${new Date(item.date).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · ${item.correct}/${item.questionCount || 25} correctas</small></span><span>${item.passed ? 'Aprobado' : 'Revisar'}</span></div>`).join('');
   }
 
   function renderAccount() {
@@ -92,15 +92,47 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
     }
   }
 
+  function currentExamConfig() {
+    const mode = $('examMode').value;
+    return {
+      mode,
+      questionCount: mode === 'official' ? 25 : Number($('questionCount').value),
+      timeLimitSeconds: mode === 'official' ? 35 * 60 : mode === 'untimed' ? 0 : Number($('timeLimit').value) * 60
+    };
+  }
+
+  function updateExamSettings() {
+    const mode = $('examMode').value;
+    if (mode === 'official') {
+      $('questionCount').value = '25';
+      $('timeLimit').value = '35';
+    } else if (mode === 'untimed') {
+      $('timeLimit').value = '0';
+    } else if ($('timeLimit').value === '0') {
+      $('timeLimit').value = '35';
+    }
+    $('questionCount').disabled = mode === 'official';
+    $('timeLimit').disabled = mode !== 'timed';
+    const config = currentExamConfig();
+    $('factQuestions').textContent = config.questionCount;
+    $('factPass').textContent = '84%';
+    $('factTime').textContent = config.timeLimitSeconds ? `${config.timeLimitSeconds / 60} min` : 'Sin límite';
+    $('modeBadge').textContent = mode === 'official' ? '25 PREGUNTAS · 35 MIN' : mode === 'timed' ? 'A TU MEDIDA' : 'SIN CRONÓMETRO';
+  }
+
   function begin() {
     if (!available || !currentUser) return;
-    const selected = [...BANK.questions].sort(() => Math.random() - 0.5).slice(0, 25);
-    exam = { questions: selected, answers: Array.from({ length: 25 }, () => []), index: 0, remaining: 1500, started: Date.now(), finishing: false };
-    $('timer').textContent = fmt(exam.remaining);
+    const config = currentExamConfig();
+    const selected = [...BANK.questions].sort(() => Math.random() - 0.5).slice(0, config.questionCount);
+    exam = { ...config, questions: selected, answers: Array.from({ length: selected.length }, () => []), index: 0, remaining: config.timeLimitSeconds, startedAt: Date.now(), finishing: false };
+    $('timer').textContent = exam.timeLimitSeconds ? fmt(exam.remaining) : 'Sin tiempo';
     $('timer').classList.remove('urgent');
+    $('timer').classList.toggle('no-limit', !exam.timeLimitSeconds);
+    $('examTitle').textContent = exam.mode === 'official' ? 'EXAMEN OFICIAL · 25 PREGUNTAS' : exam.mode === 'untimed' ? 'PRUEBA SIN TIEMPO' : 'ENTRENAMIENTO CON TIEMPO';
     $('examDialog').showModal();
     renderQuestion();
     clearInterval(ticker);
+    if (!exam.timeLimitSeconds) return;
     ticker = setInterval(() => {
       if (!exam) return;
       exam.remaining--;
@@ -113,20 +145,21 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
   function renderQuestion() {
     const question = exam.questions[exam.index];
     const number = exam.index + 1;
-    $('progressText').textContent = `Pregunta ${number} de 25`;
+    const questionCount = exam.questions.length;
+    $('progressText').textContent = `Pregunta ${number} de ${questionCount}`;
     $('questionNumber').textContent = `PREGUNTA ${String(number).padStart(2, '0')}`;
     $('questionText').textContent = question.text;
     $('multiHint').textContent = question.correct.length > 1 ? 'Selecciona todas las respuestas correctas' : '';
     $('options').innerHTML = question.options.map(option => `<label class="option"><input type="${question.correct.length > 1 ? 'checkbox' : 'radio'}" name="answer" value="${option.key}" ${exam.answers[exam.index].includes(option.key) ? 'checked' : ''}><span><b>${option.key.toUpperCase()}.</b> ${escapeHtml(option.text)}</span></label>`).join('');
     $('options').querySelectorAll('input').forEach(input => input.addEventListener('change', () => {
       exam.answers[exam.index] = [...$('options').querySelectorAll('input:checked')].map(item => item.value);
-      $('answeredCount').textContent = `${exam.answers.filter(answer => answer.length).length} / 25 respondidas`;
+      $('answeredCount').textContent = `${exam.answers.filter(answer => answer.length).length} / ${questionCount} respondidas`;
     }));
-    $('answeredCount').textContent = `${exam.answers.filter(answer => answer.length).length} / 25 respondidas`;
-    $('progressBar').style.width = `${number / 25 * 100}%`;
+    $('answeredCount').textContent = `${exam.answers.filter(answer => answer.length).length} / ${questionCount} respondidas`;
+    $('progressBar').style.width = `${number / questionCount * 100}%`;
     $('prevBtn').disabled = exam.index === 0;
-    $('nextBtn').hidden = exam.index === 24;
-    $('finishBtn').hidden = exam.index !== 24;
+    $('nextBtn').hidden = exam.index === questionCount - 1;
+    $('finishBtn').hidden = exam.index !== questionCount - 1;
   }
 
   async function finish() {
@@ -139,11 +172,16 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
       ok: [...question.correct].sort().join(',') === [...exam.answers[index]].sort().join(',')
     }));
     const correct = entries.filter(entry => entry.ok).length;
-    const score = Math.round(correct * 100 / 25);
-    const passed = correct >= 21;
+    const questionCount = exam.questions.length;
+    const score = Math.round(correct * 100 / questionCount);
+    const passed = correct >= Math.ceil(questionCount * 0.84);
+    const elapsedSeconds = exam.timeLimitSeconds ? Math.max(0, exam.timeLimitSeconds - exam.remaining) : Math.floor((Date.now() - exam.startedAt) / 1000);
     const attempt = {
       date: new Date().toISOString(), score, correct, passed,
-      seconds: Math.max(0, 1500 - exam.remaining),
+      seconds: elapsedSeconds,
+      questionCount,
+      mode: exam.mode,
+      timeLimitSeconds: exam.timeLimitSeconds,
       wrongIds: entries.filter(entry => !entry.ok).map(entry => entry.question.id),
       correctIds: entries.filter(entry => entry.ok).map(entry => entry.question.id)
     };
@@ -166,9 +204,9 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
     try {
       await jsonFetch('/.netlify/functions/progress', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ attempt }) });
       await loadMyProgress();
-      $('scoreSummary').textContent = `${correct} de 25 respuestas correctas · ${fmt(attempt.seconds)} de tiempo empleado. Resultado guardado en tu cuenta.`;
+      $('scoreSummary').textContent = `${correct} de ${questionCount} respuestas correctas · ${score}/100 · ${exam.timeLimitSeconds ? `${fmt(attempt.seconds)} de ${fmt(exam.timeLimitSeconds)}` : `${fmt(attempt.seconds)} de tiempo empleado`}. Resultado guardado en tu cuenta.`;
     } catch (error) {
-      $('scoreSummary').textContent = `${correct} de 25 respuestas correctas · ${fmt(attempt.seconds)} de tiempo empleado. No se pudo sincronizar el resultado: ${error.message}`;
+      $('scoreSummary').textContent = `${correct} de ${questionCount} respuestas correctas · ${score}/100 · ${fmt(attempt.seconds)} de tiempo empleado. No se pudo sincronizar el resultado: ${error.message}`;
     }
     exam = null;
   }
@@ -185,7 +223,7 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
         return;
       }
       $('adminUsers').innerHTML = data.users.map(user => {
-        const exams = user.history.map(item => `<li>${new Date(item.date).toLocaleDateString('es-ES')} · ${item.score}/100 · ${item.correct}/25 ${item.passed ? '· aprobado' : ''}</li>`).join('');
+        const exams = user.history.map(item => `<li>${new Date(item.date).toLocaleDateString('es-ES')} · ${item.score}/100 · ${item.correct}/${item.questionCount || 25} ${item.passed ? '· aprobado' : ''}</li>`).join('');
         return `<tr><td><span class="user-name">${escapeHtml(user.name)}</span><span class="user-email">${escapeHtml(user.email)}</span><details class="user-attempts"><summary>Ver ${user.history.length} exámenes</summary><ul>${exams || '<li>Sin exámenes todavía</li>'}</ul></details></td><td>${escapeHtml(user.federation || 'Sin indicar')}</td><td>${user.examCount}</td><td>${user.average === null ? '—' : `${user.average}/100`}</td><td>${user.best === null ? '—' : `${user.best}/100`}</td><td>${user.wrongCount}</td></tr>`;
       }).join('');
     } catch (error) {
@@ -246,6 +284,10 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
 
   $('showSignup').onclick = showSignupForm;
   $('showLogin').onclick = showLoginForm;
+  $('examMode').addEventListener('change', updateExamSettings);
+  $('questionCount').addEventListener('change', updateExamSettings);
+  $('timeLimit').addEventListener('change', updateExamSettings);
+  updateExamSettings();
   const menuButton = $('accountMenuButton');
   const accountMenu = $('accountMenu');
   function closeAccountMenu() { accountMenu.hidden = true; menuButton.setAttribute('aria-expanded', 'false'); }
