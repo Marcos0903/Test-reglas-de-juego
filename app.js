@@ -4,6 +4,26 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
   const BANK = window.QUESTION_BANK;
   const $ = id => document.getElementById(id);
   const available = BANK?.verified && BANK.questions.length >= 25;
+  const RULE_TITLES = {
+    1: 'El terreno de juego',
+    2: 'Tiempo de juego y señal final',
+    3: 'El balón',
+    4: 'El equipo, sustituciones y equipamiento',
+    5: 'El portero',
+    6: 'El área de portería',
+    7: 'Cómo puede jugarse el balón, juego pasivo',
+    8: 'Faltas y conducta antideportiva',
+    9: 'El gol',
+    10: 'El saque de centro',
+    11: 'El saque de banda',
+    12: 'El saque de portería',
+    13: 'El golpe franco',
+    14: 'El lanzamiento de 7 metros',
+    15: 'Instrucciones para la ejecución de los lanzamientos',
+    16: 'Las sanciones',
+    17: 'Los árbitros',
+    18: 'El anotador y el cronometrador'
+  };
   let currentUser = null;
   let progress = { history: [], wrongIds: [] };
   let exam = null;
@@ -43,7 +63,7 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
       return;
     }
     list.className = 'history-list';
-    list.innerHTML = history.slice(0, 4).map(item => `<div class="history-item"><span><b>${item.score}/100</b><small>${new Date(item.date).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · ${item.correct}/${item.questionCount || 25} correctas</small></span><span>${item.passed ? 'Aprobado' : 'Revisar'}</span></div>`).join('');
+    list.innerHTML = history.slice(0, 4).map(item => `<div class="history-item"><span><b>${item.score}/100</b><small>${new Date(item.date).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })} · ${item.correct}/${item.questionCount || 25} correctas${item.mode === 'rule' && item.ruleNumber ? ` · Regla ${item.ruleNumber}` : ''}</small></span><span>${item.passed ? 'Aprobado' : 'Revisar'}</span></div>`).join('');
   }
 
   function renderAccount() {
@@ -94,41 +114,84 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
 
   function currentExamConfig() {
     const mode = $('examMode').value;
+    const ruleNumber = mode === 'rule' ? Number($('ruleSelect').value) : null;
     return {
       mode,
+      ruleNumber,
+      ruleTitle: ruleNumber ? RULE_TITLES[ruleNumber] : null,
       questionCount: mode === 'official' ? 25 : Number($('questionCount').value),
-      timeLimitSeconds: mode === 'official' ? 35 * 60 : mode === 'untimed' ? 0 : Number($('timeLimit').value) * 60
+      timeLimitSeconds: mode === 'official' ? 35 * 60 : mode === 'timed' || mode === 'rule' ? Number($('timeLimit').value) * 60 : 0
     };
+  }
+
+  function questionsForRule(ruleNumber) {
+    return BANK.questions.filter(question => Number(question.id.match(/^(\d+)\./)?.[1]) === Number(ruleNumber));
+  }
+
+  function populateRuleOptions() {
+    const ruleCounts = new Map();
+    for (const question of BANK?.questions || []) {
+      const ruleNumber = Number(question.id.match(/^(\d+)\./)?.[1]);
+      if (Number.isInteger(ruleNumber) && RULE_TITLES[ruleNumber]) ruleCounts.set(ruleNumber, (ruleCounts.get(ruleNumber) || 0) + 1);
+    }
+    $('ruleSelect').innerHTML = [...ruleCounts.entries()].sort((a, b) => a[0] - b[0]).map(([number, count]) =>
+      `<option value="${number}">Regla ${number} · ${escapeHtml(RULE_TITLES[number])}</option>`
+    ).join('');
+  }
+
+  function updateRuleQuestionChoices() {
+    const select = $('questionCount');
+    const previousCount = Number(select.value);
+    [...select.options].filter(option => option.dataset.ruleAll === 'true').forEach(option => option.remove());
+    const ruleQuestions = questionsForRule($('ruleSelect').value);
+    const count = ruleQuestions.length;
+    const hasExactChoice = [...select.options].some(option => Number(option.value) === count);
+    if (count && !hasExactChoice) {
+      const allOption = new Option(`Todas (${count})`, String(count));
+      allOption.dataset.ruleAll = 'true';
+      select.add(allOption);
+    }
+    [...select.options].forEach(option => { option.disabled = Number(option.value) > count; });
+    select.value = previousCount <= count && [...select.options].some(option => Number(option.value) === previousCount) ? String(previousCount) : String(count);
+    $('ruleQuestionInfo').textContent = `${count} preguntas verificadas disponibles`;
   }
 
   function updateExamSettings() {
     const mode = $('examMode').value;
+    $('rulePicker').hidden = mode !== 'rule';
+    if (mode === 'rule') updateRuleQuestionChoices();
+    else {
+      [...$('questionCount').options].filter(option => option.dataset.ruleAll === 'true').forEach(option => option.remove());
+      [...$('questionCount').options].forEach(option => { option.disabled = false; });
+      if (![...$('questionCount').options].some(option => Number(option.value) === Number($('questionCount').value))) $('questionCount').value = '25';
+    }
     if (mode === 'official') {
       $('questionCount').value = '25';
       $('timeLimit').value = '35';
     } else if (mode === 'untimed') {
       $('timeLimit').value = '0';
-    } else if ($('timeLimit').value === '0') {
+    } else if (mode !== 'rule' && $('timeLimit').value === '0') {
       $('timeLimit').value = '35';
     }
     $('questionCount').disabled = mode === 'official';
-    $('timeLimit').disabled = mode !== 'timed';
+    $('timeLimit').disabled = mode !== 'timed' && mode !== 'rule';
     const config = currentExamConfig();
     $('factQuestions').textContent = config.questionCount;
     $('factPass').textContent = '84%';
     $('factTime').textContent = config.timeLimitSeconds ? `${config.timeLimitSeconds / 60} min` : 'Sin límite';
-    $('modeBadge').textContent = mode === 'official' ? '25 PREGUNTAS · 35 MIN' : mode === 'timed' ? 'A TU MEDIDA' : 'SIN CRONÓMETRO';
+    $('modeBadge').textContent = mode === 'official' ? '25 PREGUNTAS · 35 MIN' : mode === 'timed' ? 'A TU MEDIDA' : mode === 'rule' ? `POR REGLA · ${config.timeLimitSeconds ? `${config.timeLimitSeconds / 60} MIN` : 'SIN TIEMPO'}` : 'SIN CRONÓMETRO';
   }
 
   function begin() {
     if (!available || !currentUser) return;
     const config = currentExamConfig();
-    const selected = [...BANK.questions].sort(() => Math.random() - 0.5).slice(0, config.questionCount);
+    const questionPool = config.mode === 'rule' ? questionsForRule(config.ruleNumber) : BANK.questions;
+    const selected = [...questionPool].sort(() => Math.random() - 0.5).slice(0, config.questionCount);
     exam = { ...config, questions: selected, answers: Array.from({ length: selected.length }, () => []), index: 0, remaining: config.timeLimitSeconds, startedAt: Date.now(), finishing: false };
     $('timer').textContent = exam.timeLimitSeconds ? fmt(exam.remaining) : 'Sin tiempo';
     $('timer').classList.remove('urgent');
     $('timer').classList.toggle('no-limit', !exam.timeLimitSeconds);
-    $('examTitle').textContent = exam.mode === 'official' ? 'EXAMEN OFICIAL · 25 PREGUNTAS' : exam.mode === 'untimed' ? 'PRUEBA SIN TIEMPO' : 'ENTRENAMIENTO CON TIEMPO';
+    $('examTitle').textContent = exam.mode === 'official' ? 'EXAMEN OFICIAL · 25 PREGUNTAS' : exam.mode === 'rule' ? `REGLA ${exam.ruleNumber} · ${exam.ruleTitle}`.toUpperCase() : exam.mode === 'untimed' ? 'PRUEBA SIN TIEMPO' : 'ENTRENAMIENTO CON TIEMPO';
     $('examDialog').showModal();
     renderQuestion();
     clearInterval(ticker);
@@ -181,6 +244,7 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
       seconds: elapsedSeconds,
       questionCount,
       mode: exam.mode,
+      ruleNumber: exam.mode === 'rule' ? exam.ruleNumber : null,
       timeLimitSeconds: exam.timeLimitSeconds,
       wrongIds: entries.filter(entry => !entry.ok).map(entry => entry.question.id),
       correctIds: entries.filter(entry => entry.ok).map(entry => entry.question.id)
@@ -223,7 +287,7 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
         return;
       }
       $('adminUsers').innerHTML = data.users.map(user => {
-        const exams = user.history.map(item => `<li>${new Date(item.date).toLocaleDateString('es-ES')} · ${item.score}/100 · ${item.correct}/${item.questionCount || 25} ${item.passed ? '· aprobado' : ''}</li>`).join('');
+        const exams = user.history.map(item => `<li>${new Date(item.date).toLocaleDateString('es-ES')} · ${item.score}/100 · ${item.correct}/${item.questionCount || 25}${item.mode === 'rule' && item.ruleNumber ? ` · Regla ${item.ruleNumber}` : ''} ${item.passed ? '· aprobado' : ''}</li>`).join('');
         return `<tr><td><span class="user-name">${escapeHtml(user.name)}</span><span class="user-email">${escapeHtml(user.email)}</span><details class="user-attempts"><summary>Ver ${user.history.length} exámenes</summary><ul>${exams || '<li>Sin exámenes todavía</li>'}</ul></details></td><td>${escapeHtml(user.federation || 'Sin indicar')}</td><td>${user.examCount}</td><td>${user.average === null ? '—' : `${user.average}/100`}</td><td>${user.best === null ? '—' : `${user.best}/100`}</td><td class="pass-count">${user.passedCount}</td><td class="fail-count">${user.failedCount}</td></tr>`;
       }).join('');
     } catch (error) {
@@ -287,6 +351,8 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
   $('examMode').addEventListener('change', updateExamSettings);
   $('questionCount').addEventListener('change', updateExamSettings);
   $('timeLimit').addEventListener('change', updateExamSettings);
+  $('ruleSelect').addEventListener('change', updateExamSettings);
+  populateRuleOptions();
   updateExamSettings();
   const menuButton = $('accountMenuButton');
   const accountMenu = $('accountMenu');

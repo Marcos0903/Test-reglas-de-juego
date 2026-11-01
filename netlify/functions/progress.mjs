@@ -40,20 +40,27 @@ export default async request => {
   const seconds = attempt?.seconds;
   const questionCount = attempt?.questionCount;
   const mode = attempt?.mode;
+  const ruleNumber = attempt?.ruleNumber;
   const timeLimitSeconds = attempt?.timeLimitSeconds;
-  const supportedCounts = [5, 10, 15, 20, 25, 30, 40, 50];
+  const supportedCounts = [4, 5, 10, 15, 20, 25, 30, 40, 50];
   const supportedTimes = [600, 900, 1200, 1500, 1800, 2100, 2700, 3600];
+  const validRuleMode = mode === 'rule' && supportedCounts.includes(questionCount) &&
+    Number.isInteger(ruleNumber) && ruleNumber >= 1 && ruleNumber <= 18 &&
+    (timeLimitSeconds === 0 ? seconds <= 86400 : supportedTimes.includes(timeLimitSeconds) && seconds <= timeLimitSeconds);
   const validMode = mode === 'official'
     ? questionCount === 25 && timeLimitSeconds === 2100 && seconds <= timeLimitSeconds
     : mode === 'timed'
       ? supportedCounts.includes(questionCount) && supportedTimes.includes(timeLimitSeconds) && seconds <= timeLimitSeconds
-      : mode === 'untimed' && supportedCounts.includes(questionCount) && timeLimitSeconds === 0;
+      : (mode === 'untimed' && supportedCounts.includes(questionCount) && timeLimitSeconds === 0) || validRuleMode;
+  const resultIds = [...(Array.isArray(wrongIds) ? wrongIds : []), ...(Array.isArray(correctIds) ? correctIds : [])];
+  const idsBelongToRule = mode !== 'rule' || resultIds.every(id => typeof id === 'string' && id.startsWith(`${ruleNumber}.`));
   if (!Number.isInteger(questionCount) || !supportedCounts.includes(questionCount) ||
       !Number.isInteger(correct) || correct < 0 || correct > questionCount ||
       !Number.isInteger(seconds) || seconds < 0 || seconds > 86400 || !validMode ||
       !Array.isArray(wrongIds) || wrongIds.length > questionCount ||
       !Array.isArray(correctIds) || correctIds.length > questionCount ||
       wrongIds.length + correctIds.length !== questionCount || correctIds.length !== correct ||
+      !idsBelongToRule ||
       [...wrongIds, ...correctIds].some(id => typeof id !== 'string' || !/^\d+\.\d+$/.test(id)) ||
       new Set([...wrongIds, ...correctIds]).size !== wrongIds.length + correctIds.length) {
     return json({ error: 'El resultado del examen no es válido.' }, 400);
@@ -68,6 +75,7 @@ export default async request => {
     seconds,
     questionCount,
     mode,
+    ruleNumber: mode === 'rule' ? ruleNumber : null,
     timeLimitSeconds,
     wrongIds,
     correctIds
