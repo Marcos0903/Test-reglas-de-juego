@@ -219,12 +219,12 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
       const data = await jsonFetch('/.netlify/functions/admin-progress');
       $('adminStatus').textContent = `${data.users.length} cuentas registradas`;
       if (!data.users.length) {
-        $('adminUsers').innerHTML = '<tr><td class="empty-row" colspan="6">Todavía no hay cuentas registradas.</td></tr>';
+        $('adminUsers').innerHTML = '<tr><td class="empty-row" colspan="7">Todavía no hay cuentas registradas.</td></tr>';
         return;
       }
       $('adminUsers').innerHTML = data.users.map(user => {
         const exams = user.history.map(item => `<li>${new Date(item.date).toLocaleDateString('es-ES')} · ${item.score}/100 · ${item.correct}/${item.questionCount || 25} ${item.passed ? '· aprobado' : ''}</li>`).join('');
-        return `<tr><td><span class="user-name">${escapeHtml(user.name)}</span><span class="user-email">${escapeHtml(user.email)}</span><details class="user-attempts"><summary>Ver ${user.history.length} exámenes</summary><ul>${exams || '<li>Sin exámenes todavía</li>'}</ul></details></td><td>${escapeHtml(user.federation || 'Sin indicar')}</td><td>${user.examCount}</td><td>${user.average === null ? '—' : `${user.average}/100`}</td><td>${user.best === null ? '—' : `${user.best}/100`}</td><td>${user.wrongCount}</td></tr>`;
+        return `<tr><td><span class="user-name">${escapeHtml(user.name)}</span><span class="user-email">${escapeHtml(user.email)}</span><details class="user-attempts"><summary>Ver ${user.history.length} exámenes</summary><ul>${exams || '<li>Sin exámenes todavía</li>'}</ul></details></td><td>${escapeHtml(user.federation || 'Sin indicar')}</td><td>${user.examCount}</td><td>${user.average === null ? '—' : `${user.average}/100`}</td><td>${user.best === null ? '—' : `${user.best}/100`}</td><td class="pass-count">${user.passedCount}</td><td class="fail-count">${user.failedCount}</td></tr>`;
       }).join('');
     } catch (error) {
       $('adminStatus').textContent = error.message || 'No se pudo cargar el seguimiento.';

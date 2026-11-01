@@ -19,21 +19,18 @@ export default async () => {
   const users = await Promise.all(accounts.map(async account => {
     const user = account.user || account;
     const history = await getHistory(user.id);
-    const wrongIds = new Set();
-    for (const attempt of [...history].reverse()) {
-      for (const id of attempt.wrongIds || []) wrongIds.add(id);
-      for (const id of attempt.correctIds || []) wrongIds.delete(id);
-    }
     const scores = history.map(attempt => attempt.score);
+    const passedCount = history.filter(attempt => attempt.passed).length;
     return {
       id: user.id,
       name: user.userMetadata?.full_name || user.email?.split('@')[0] || 'Árbitro',
       email: user.email || '',
       federation: user.userMetadata?.federation || '',
       examCount: history.length,
+      passedCount,
+      failedCount: history.length - passedCount,
       average: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null,
       best: scores.length ? Math.max(...scores) : null,
-      wrongCount: wrongIds.size,
       history: history.slice(0, 50)
     };
   }));
