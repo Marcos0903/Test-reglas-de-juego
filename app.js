@@ -1,4 +1,4 @@
-import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/identity';
+import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '@netlify/identity';
 
 (() => {
   const BANK = window.QUESTION_BANK;
@@ -298,7 +298,59 @@ import { getUser, handleAuthCallback, login, logout, signup } from '@netlify/ide
     if (!currentUser) { showLoginForm(); $('authDialog').showModal(); return; }
     $('accountDetails').innerHTML = `<p class="account-name">${escapeHtml(fullName(currentUser))}</p><p class="account-email">${escapeHtml(currentUser.email || '')}</p><p class="account-hint">Federación: ${escapeHtml(currentUser.userMetadata?.federation || 'Sin indicar')}</p>`;
     $('accountAccess').hidden = true;
+    $('federationForm').hidden = false;
+    $('accountFederation').value = currentUser.userMetadata?.federation || '';
+    $('federationMessage').textContent = '';
+    $('federationMessage').classList.remove('error');
+    $('passwordSection').hidden = false;
+    $('passwordMessage').textContent = '';
+    $('passwordMessage').classList.remove('error');
     $('accountDialog').showModal();
+  };
+  $('federationForm').onsubmit = async event => {
+    event.preventDefault();
+    const button = $('federationForm').querySelector('button[type="submit"]');
+    button.disabled = true;
+    $('federationMessage').textContent = 'Guardando…';
+    $('federationMessage').classList.remove('error');
+    try {
+      const metadata = { ...(currentUser.userMetadata || {}), federation: $('accountFederation').value.trim() };
+      currentUser = await updateUser({ data: metadata });
+      renderAccount();
+      $('accountDetails').innerHTML = `<p class="account-name">${escapeHtml(fullName(currentUser))}</p><p class="account-email">${escapeHtml(currentUser.email || '')}</p><p class="account-hint">Federación: ${escapeHtml(currentUser.userMetadata?.federation || 'Sin indicar')}</p>`;
+      $('federationMessage').textContent = 'Federación actualizada.';
+    } catch (error) {
+      $('federationMessage').textContent = error.message || 'No se pudo actualizar la federación.';
+      $('federationMessage').classList.add('error');
+    } finally {
+      button.disabled = false;
+    }
+  };
+  $('accountPasswordForm').onsubmit = async event => {
+    event.preventDefault();
+    const button = $('accountPasswordForm').querySelector('button[type="submit"]');
+    const currentPassword = $('currentPassword').value;
+    const newPassword = $('newPassword').value;
+    if (newPassword !== $('confirmPassword').value) {
+      $('passwordMessage').textContent = 'Las nuevas contraseñas no coinciden.';
+      $('passwordMessage').classList.add('error');
+      return;
+    }
+    button.disabled = true;
+    $('passwordMessage').textContent = 'Actualizando contraseña…';
+    $('passwordMessage').classList.remove('error');
+    try {
+      await login(currentUser.email, currentPassword);
+      currentUser = await updateUser({ password: newPassword });
+      await setUser(currentUser);
+      $('accountPasswordForm').reset();
+      $('passwordMessage').textContent = 'Contraseña actualizada correctamente.';
+    } catch (error) {
+      $('passwordMessage').textContent = error.message || 'No se pudo cambiar la contraseña. Comprueba la contraseña actual.';
+      $('passwordMessage').classList.add('error');
+    } finally {
+      button.disabled = false;
+    }
   };
   $('accountAccess').onclick = () => { $('accountDialog').close(); showLoginForm(); $('authDialog').showModal(); };
   $('closeAccount').onclick = () => $('accountDialog').close();
