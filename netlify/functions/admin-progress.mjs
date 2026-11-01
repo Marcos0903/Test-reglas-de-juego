@@ -29,6 +29,7 @@ export default async () => {
       id: user.id,
       name: user.userMetadata?.full_name || user.email?.split('@')[0] || 'Árbitro',
       email: user.email || '',
+      federation: user.userMetadata?.federation || '',
       examCount: history.length,
       average: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null,
       best: scores.length ? Math.max(...scores) : null,
@@ -39,4 +40,3 @@ export default async () => {
   users.sort((a, b) => a.name.localeCompare(b.name, 'es'));
   return json({ users });
 };
-
