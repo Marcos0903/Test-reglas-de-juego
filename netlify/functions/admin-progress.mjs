@@ -28,6 +28,7 @@ export default async () => {
       email: user.email || '',
       federation: user.userMetadata?.federation || '',
       examCount: history.length,
+      scoreTotal: scores.reduce((sum, score) => sum + score, 0),
       passedCount,
       failedCount: history.length - passedCount,
       average: scores.length ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length) : null,
