@@ -28,6 +28,7 @@ export default async request => {
 
   const accounts = await admin.listUsers();
   const validUserIds = new Set(accounts.map(account => (account.user || account).id));
+  const savedGroups = await store.get(GROUPS_KEY, { type: 'json' }) || [];
   const seenGroupIds = new Set();
   const groups = [];
   for (const group of body.groups) {
@@ -40,6 +41,10 @@ export default async request => {
     }
     seenGroupIds.add(id);
     groups.push({ id, name, userIds });
+  }
+
+  if (savedGroups.some(group => !seenGroupIds.has(group.id))) {
+    return json({ error: 'Los grupos creados se conservan y no se pueden eliminar.' }, 400);
   }
 
   await store.set(GROUPS_KEY, JSON.stringify(groups));
