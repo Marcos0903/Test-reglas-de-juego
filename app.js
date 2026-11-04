@@ -330,14 +330,6 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
       trackingGroups = data.groups || [];
       $('adminStatus').textContent = `${data.users.length} cuentas registradas`;
       renderTrackingGroups();
-      if (!data.users.length) {
-        $('adminUsers').innerHTML = '<tr><td class="empty-row" colspan="7">Todavía no hay cuentas registradas.</td></tr>';
-        return;
-      }
-      $('adminUsers').innerHTML = data.users.map(user => {
-        const exams = user.history.map(item => `<li>${new Date(item.date).toLocaleDateString('es-ES')} · ${item.score}/100 · ${item.correct}/${item.questionCount || 25}${item.mode === 'rule' && item.ruleNumber ? ` · Regla ${item.ruleNumber}` : ''} ${item.passed ? '· aprobado' : ''}</li>`).join('');
-        return `<tr><td><span class="user-name">${escapeHtml(user.name)}</span><span class="user-email">${escapeHtml(user.email)}</span><details class="user-attempts"><summary>Ver ${user.history.length} exámenes</summary><ul>${exams || '<li>Sin exámenes todavía</li>'}</ul></details></td><td>${escapeHtml(user.federation || 'Sin indicar')}</td><td>${user.examCount}</td><td>${user.average === null ? '—' : `${user.average}/100`}</td><td>${user.best === null ? '—' : `${user.best}/100`}</td><td class="pass-count">${user.passedCount}</td><td class="fail-count">${user.failedCount}</td></tr>`;
-      }).join('');
     } catch (error) {
       $('adminStatus').textContent = error.message || 'No se pudo cargar el seguimiento.';
       $('adminStatus').classList.add('auth-status-error');
@@ -363,15 +355,57 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
 
   function renderTrackingGroups() {
     const root = $('trackingGroups');
+    const filter = $('trackingFilter');
+    const selectedFilter = filter.value;
+    filter.innerHTML = '<option value="">Todas las personas</option>' + trackingGroups.map(group => `<option value="${escapeHtml(group.id)}">${escapeHtml(group.name)}</option>`).join('') + '<option value="__ungrouped">Sin grupo</option>';
+    if ([...filter.options].some(option => option.value === selectedFilter)) filter.value = selectedFilter;
     if (!trackingGroups.length) {
       root.innerHTML = '<p class="groups-empty">Aún no hay grupos. Crea uno para reunir a las personas cuyo progreso quieras consultar.</p>';
+      renderAdminUsers();
       return;
     }
     root.innerHTML = trackingGroups.map(group => {
       const members = group.userIds.map(id => adminUsers.find(user => user.id === id)).filter(Boolean);
       const availableMembers = adminUsers.filter(user => !group.userIds.includes(user.id));
-      return `<article class="tracking-group" data-group-id="${escapeHtml(group.id)}"><div class="tracking-group-head"><label><span>Nombre del grupo</span><input class="group-name-input" type="text" maxlength="60" value="${escapeHtml(group.name)}" aria-label="Nombre del grupo"></label><button type="button" class="group-delete" data-action="delete-group">Eliminar grupo</button></div><div class="group-members"><div class="group-members-head"><b>${members.length} ${members.length === 1 ? 'persona' : 'personas'}</b><span>Añade cuentas registradas por su nombre</span></div>${members.length ? `<ul>${members.map(user => `<li><div class="group-member-copy"><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.federation || 'Federación sin indicar')} · ${user.examCount} ${user.examCount === 1 ? 'examen' : 'exámenes'} · media ${user.average === null ? '—' : `${user.average}/100`}</small><small><span class="pass-count">${user.passedCount} aprobados</span> · <span class="fail-count">${user.failedCount} suspendidos</span></small></div><button type="button" data-action="remove-member" data-user-id="${escapeHtml(user.id)}" aria-label="Quitar a ${escapeHtml(user.name)} del grupo">Quitar</button></li>`).join('')}</ul>` : '<p class="group-no-members">Todavía no hay integrantes.</p>'}<form class="add-member-form"><label class="sr-only">Persona a añadir</label><select aria-label="Seleccionar persona para añadir" ${availableMembers.length ? '' : 'disabled'}><option value="">${availableMembers.length ? 'Selecciona una cuenta…' : 'Todas las cuentas ya están en el grupo'}</option>${availableMembers.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)}${user.federation ? ` · ${escapeHtml(user.federation)}` : ''}</option>`).join('')}</select><button type="submit" class="button ghost" ${availableMembers.length ? '' : 'disabled'}>Añadir persona</button></form></div></article>`;
+      const examCount = members.reduce((sum, user) => sum + user.examCount, 0);
+      const scoreTotal = members.reduce((sum, user) => sum + user.scoreTotal, 0);
+      const avg = examCount ? Math.round(scoreTotal / examCount) : null;
+      const passed = members.reduce((sum, user) => sum + user.passedCount, 0);
+      const failed = members.reduce((sum, user) => sum + user.failedCount, 0);
+      return `<article class="tracking-group" data-group-id="${escapeHtml(group.id)}"><div class="tracking-group-head"><label><span>Nombre del grupo</span><input class="group-name-input" type="text" maxlength="60" value="${escapeHtml(group.name)}" aria-label="Nombre del grupo"></label><button type="button" class="group-delete" data-action="delete-group">Eliminar grupo</button></div><div class="group-summary"><div><b>${examCount}</b><span>exámenes</span></div><div><b>${avg === null ? '—' : `${avg}/100`}</b><span>media del grupo</span></div><div><b class="pass-count">${passed}</b><span>aprobados</span></div><div><b class="fail-count">${failed}</b><span>suspendidos</span></div></div><div class="group-members"><div class="group-members-head"><b>${members.length} ${members.length === 1 ? 'persona' : 'personas'}</b><span>Añade cuentas registradas por su nombre</span></div>${members.length ? `<ul>${members.map(user => `<li><div class="group-member-copy"><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.federation || 'Federación sin indicar')} · ${user.examCount} ${user.examCount === 1 ? 'examen' : 'exámenes'} · media ${user.average === null ? '—' : `${user.average}/100`}</small><small><span class="pass-count">${user.passedCount} aprobados</span> · <span class="fail-count">${user.failedCount} suspendidos</span></small></div><button type="button" data-action="remove-member" data-user-id="${escapeHtml(user.id)}" aria-label="Quitar a ${escapeHtml(user.name)} del grupo">Quitar</button></li>`).join('')}</ul>` : '<p class="group-no-members">Todavía no hay integrantes.</p>'}<form class="add-member-form"><label class="sr-only">Buscar y seleccionar persona</label><input class="member-search" type="search" placeholder="Buscar persona o federación" aria-label="Buscar persona o federación" ${availableMembers.length ? '' : 'disabled'}><select aria-label="Seleccionar persona para añadir" ${availableMembers.length ? '' : 'disabled'}><option value="">${availableMembers.length ? 'Selecciona una cuenta…' : 'Todas las cuentas ya están en el grupo'}</option>${availableMembers.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)}${user.federation ? ` · ${escapeHtml(user.federation)}` : ''}</option>`).join('')}</select><button type="submit" class="button ghost" ${availableMembers.length ? '' : 'disabled'}>Añadir persona</button></form></div></article>`;
     }).join('');
+    renderAdminUsers();
+  }
+
+  function renderAdminUsers() {
+    const filter = $('trackingFilter')?.value || '';
+    const memberIds = filter && filter !== '__ungrouped' ? trackingGroups.find(group => group.id === filter)?.userIds || [] : null;
+    const users = adminUsers.filter(user => filter === '__ungrouped'
+      ? !trackingGroups.some(group => group.userIds.includes(user.id))
+      : memberIds ? memberIds.includes(user.id) : true);
+    if (!users.length) {
+      $('adminUsers').innerHTML = `<tr><td class="empty-row" colspan="7">${adminUsers.length ? 'No hay árbitros en este grupo.' : 'Todavía no hay cuentas registradas.'}</td></tr>`;
+      return;
+    }
+    $('adminUsers').innerHTML = users.map(user => {
+      const exams = user.history.map(item => `<li>${new Date(item.date).toLocaleDateString('es-ES')} · ${item.score}/100 · ${item.correct}/${item.questionCount || 25}${item.mode === 'rule' && item.ruleNumber ? ` · Regla ${item.ruleNumber}` : ''} ${item.passed ? '· aprobado' : ''}</li>`).join('');
+      return `<tr><td><span class="user-name">${escapeHtml(user.name)}</span><span class="user-email">${escapeHtml(user.email)}</span><details class="user-attempts"><summary>Ver ${user.history.length} exámenes</summary><ul>${exams || '<li>Sin exámenes todavía</li>'}</ul></details></td><td>${escapeHtml(user.federation || 'Sin indicar')}</td><td>${user.examCount}</td><td>${user.average === null ? '—' : `${user.average}/100`}</td><td>${user.best === null ? '—' : `${user.best}/100`}</td><td class="pass-count">${user.passedCount}</td><td class="fail-count">${user.failedCount}</td></tr>`;
+    }).join('');
+  }
+
+  function updateMemberOptions(form) {
+    const card = form.closest('[data-group-id]');
+    const group = trackingGroups.find(item => item.id === card?.dataset.groupId);
+    if (!group) return;
+    const query = form.querySelector('.member-search').value.trim().toLocaleLowerCase('es');
+    const select = form.querySelector('select');
+    const selected = select.value;
+    const available = adminUsers.filter(user => !group.userIds.includes(user.id));
+    const matches = available.filter(user => `${user.name} ${user.federation} ${user.email}`.toLocaleLowerCase('es').includes(query));
+    select.innerHTML = `<option value="">${matches.length ? 'Selecciona una cuenta…' : query ? 'No se encontraron cuentas' : 'Todas las cuentas ya están en el grupo'}</option>${matches.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)}${user.federation ? ` · ${escapeHtml(user.federation)}` : ''}</option>`).join('')}`;
+    if (matches.some(user => user.id === selected)) select.value = selected;
+    select.disabled = !matches.length;
+    form.querySelector('button[type="submit"]').disabled = !matches.length;
   }
 
   $('createGroupForm').addEventListener('submit', async event => {
@@ -391,6 +425,12 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
     const name = input.value.trim();
     if (!group || !name || group.name === name) { input.value = group?.name || ''; return; }
     await saveTrackingGroups(trackingGroups.map(item => item.id === group.id ? { ...item, name } : item));
+  });
+
+  $('trackingFilter').addEventListener('change', renderAdminUsers);
+  $('trackingGroups').addEventListener('input', event => {
+    const form = event.target.closest('.add-member-form');
+    if (form && event.target.matches('.member-search')) updateMemberOptions(form);
   });
 
   $('trackingGroups').addEventListener('submit', async event => {
