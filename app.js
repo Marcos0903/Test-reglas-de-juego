@@ -26,7 +26,7 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
   };
   let currentUser = null;
   let progress = { history: [], wrongIds: [] };
-  let exam = null;
+  let   let exam = null;
   let ticker = null;
 
   const fmt = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -324,7 +324,10 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
     $('adminUsers').innerHTML = '';
     try {
       const data = await jsonFetch('/.netlify/functions/admin-progress');
+      adminUsers = data.users;
+      trackingGroups = data.groups || [];
       $('adminStatus').textContent = `${data.users.length} cuentas registradas`;
+      renderTrackingGroups();
       if (!data.users.length) {
         $('adminUsers').innerHTML = '<tr><td class="empty-row" colspan="7">Todavía no hay cuentas registradas.</td></tr>';
         return;
@@ -338,6 +341,78 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
       $('adminStatus').classList.add('auth-status-error');
     }
   }
+
+  async function saveTrackingGroups(nextGroups) {
+    $('groupStatus').textContent = 'Guardando cambios…';
+    $('groupStatus').classList.remove('auth-status-error');
+    try {
+      const result = await jsonFetch('/.netlify/functions/admin-groups', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groups: nextGroups })
+      });
+      trackingGroups = result.groups;
+      $('groupStatus').textContent = 'Grupos actualizados.';
+      renderTrackingGroups();
+    } catch (error) {
+      $('groupStatus').textContent = error.message || 'No se pudieron guardar los grupos.';
+      $('groupStatus').classList.add('auth-status-error');
+    }
+  }
+
+  function renderTrackingGroups() {
+    const root = $('trackingGroups');
+    if (!trackingGroups.length) {
+      root.innerHTML = '<p class="groups-empty">Aún no hay grupos. Crea uno para reunir a las personas cuyo progreso quieras consultar.</p>';
+      return;
+    }
+    root.innerHTML = trackingGroups.map(group => {
+      const members = group.userIds.map(id => adminUsers.find(user => user.id === id)).filter(Boolean);
+      const availableMembers = adminUsers.filter(user => !group.userIds.includes(user.id));
+      return `<article class="tracking-group" data-group-id="${escapeHtml(group.id)}"><div class="tracking-group-head"><label><span>Nombre del grupo</span><input class="group-name-input" type="text" maxlength="60" value="${escapeHtml(group.name)}" aria-label="Nombre del grupo"></label><button type="button" class="group-delete" data-action="delete-group">Eliminar grupo</button></div><div class="group-members"><div class="group-members-head"><b>${members.length} ${members.length === 1 ? 'persona' : 'personas'}</b><span>Añade cuentas registradas por su nombre</span></div>${members.length ? `<ul>${members.map(user => `<li><div class="group-member-copy"><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.federation || 'Federación sin indicar')} · ${user.examCount} ${user.examCount === 1 ? 'examen' : 'exámenes'} · media ${user.average === null ? '—' : `${user.average}/100`}</small><small><span class="pass-count">${user.passedCount} aprobados</span> · <span class="fail-count">${user.failedCount} suspendidos</span></small></div><button type="button" data-action="remove-member" data-user-id="${escapeHtml(user.id)}" aria-label="Quitar a ${escapeHtml(user.name)} del grupo">Quitar</button></li>`).join('')}</ul>` : '<p class="group-no-members">Todavía no hay integrantes.</p>'}<form class="add-member-form"><label class="sr-only">Persona a añadir</label><select aria-label="Seleccionar persona para añadir" ${availableMembers.length ? '' : 'disabled'}><option value="">${availableMembers.length ? 'Selecciona una cuenta…' : 'Todas las cuentas ya están en el grupo'}</option>${availableMembers.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name)}${user.federation ? ` · ${escapeHtml(user.federation)}` : ''}</option>`).join('')}</select><button type="submit" class="button ghost" ${availableMembers.length ? '' : 'disabled'}>Añadir persona</button></form></div></article>`;
+    }).join('');
+  }
+
+  $('createGroupForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const name = $('newGroupName').value.trim();
+    if (!name) return;
+    const group = { id: crypto.randomUUID(), name, userIds: [] };
+    $('newGroupName').value = '';
+    await saveTrackingGroups([...trackingGroups, group]);
+  });
+
+  $('trackingGroups').addEventListener('change', async event => {
+    const input = event.target.closest('.group-name-input');
+    if (!input) return;
+    const card = input.closest('[data-group-id]');
+    const group = trackingGroups.find(item => item.id === card.dataset.groupId);
+    const name = input.value.trim();
+    if (!group || !name || group.name === name) { input.value = group?.name || ''; return; }
+    await saveTrackingGroups(trackingGroups.map(item => item.id === group.id ? { ...item, name } : item));
+  });
+
+  $('trackingGroups').addEventListener('submit', async event => {
+    const form = event.target.closest('.add-member-form');
+    if (!form) return;
+    event.preventDefault();
+    const card = form.closest('[data-group-id]');
+    const userId = form.querySelector('select').value;
+    if (!userId) return;
+    await saveTrackingGroups(trackingGroups.map(group => group.id === card.dataset.groupId ? { ...group, userIds: [...group.userIds, userId] } : group));
+  });
+
+  $('trackingGroups').addEventListener('click', async event => {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const card = button.closest('[data-group-id]');
+    const group = trackingGroups.find(item => item.id === card.dataset.groupId);
+    if (button.dataset.action === 'delete-group' && group && confirm(`¿Eliminar el grupo «${group.name}»?`)) {
+      await saveTrackingGroups(trackingGroups.filter(item => item.id !== group.id));
+    }
+    if (button.dataset.action === 'remove-member' && group) {
+      await saveTrackingGroups(trackingGroups.map(item => item.id === group.id ? { ...item, userIds: item.userIds.filter(id => id !== button.dataset.userId) } : item));
+    }
+  });
 
   function escapeHtml(value) {
     return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -488,3 +563,4 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
   renderAccount();
   initializeAccount();
 })();
+
