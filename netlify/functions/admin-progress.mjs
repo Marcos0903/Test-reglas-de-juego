@@ -2,6 +2,7 @@ import { getStore } from '@netlify/blobs';
 import { admin, getUser } from '@netlify/identity';
 
 const store = getStore({ name: 'referee-progress', region: 'eu-central-1', consistency: 'strong' });
+const GROUPS_KEY = 'tracking-groups';
 const json = (body, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 
 async function getHistory(userId) {
@@ -35,5 +36,7 @@ export default async () => {
     };
   }));
   users.sort((a, b) => a.name.localeCompare(b.name, 'es'));
-  return json({ users });
+  const groups = await store.get(GROUPS_KEY, { type: 'json' }) || [];
+  return json({ users, groups });
 };
+
