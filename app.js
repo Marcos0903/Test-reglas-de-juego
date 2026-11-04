@@ -26,7 +26,9 @@ import { getUser, handleAuthCallback, login, logout, signup, updateUser } from '
   };
   let currentUser = null;
   let progress = { history: [], wrongIds: [] };
-  let   let exam = null;
+  let adminUsers = [];
+  let trackingGroups = [];
+  let exam = null;
   let ticker = null;
 
   const fmt = seconds => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
